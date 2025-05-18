@@ -1,0 +1,24 @@
+html {
+    margin: 0;
+    padding: 0;
+    background: #FAF4F3;
+}
+
+#ascii-frame {
+    background: #DFD0B8;
+    color: #74512D;
+    font-family: monospace;
+    white-space: pre;
+    line-height: 0.6;
+    width: max-content;
+    border: 1px solid #936639;
+    justify-self: center;
+    font-size: 5pt;
+}
+
+#ascii-frame::selection {
+    background-color: transparent
+}
+#ascii-frame:hover {
+    cursor: default;
+}
