@@ -139,13 +139,13 @@ def save_frames_to_json(frames, path):
 # Source image directory
 IMGDIR = 'test_images'
 # Input image index in image directory
-IMGINDEX = 0
+IMGINDEX = 3
 # Color selection, 1 for black, 0 for white\
 SELECTION = 1
 # Number tiles in img width
-DIM = 80
+DIM = 150
 # 3D image thickness
-DEPTH = 6
+DEPTH = 11
 # Number of frames in 360*
 FRAMECOUNT = 50
 # Path to JSON file to store frames
