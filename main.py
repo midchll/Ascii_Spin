@@ -1,166 +1,199 @@
+'''
+Image to 3D rotating ascii conversion. This script outputs
+    created frames to JSON to be rendered by a secondary program.
+Author: Mitchell Deevers
+'''
+
 from os import listdir
 from PIL import Image
 import math
 import json
 
-def get_ascii(dir_ind, dim=100):
-    DIM = dim
-    sects = []
-    
-    test_images = [f"test_images/{f}" for f in listdir('test_images')]
-    img = Image.open(test_images[dir_ind])
+'''
+Standard image to ASCII conversion. Image disection and character assignment
+based on target color density.
+'''
+def get_ascii(img_index, select_black=1, dim=100):
+    img = Image.open(f'{IMGDIR}/{listdir('test_images')[img_index]}')
+    # Paste img over b/w background in case of transparency
     if img.mode == "RGBA":
-        white_bg = Image.new("RGBA", img.size, "WHITE")
-        img = Image.alpha_composite(white_bg, img)
+        bg = Image.new("RGBA", img.size, "WHITE") if select_black \
+            else Image.new("RGBA", img.size, "BLACK")
+        img = Image.alpha_composite(bg, img)
         img = img.convert("RGB")
-
-    
-    img = img.resize((img.size[0] - img.size[0] % DIM, img.size[1] - img.size[1] % DIM), resample=Image.BILINEAR)
-    
-    TILESIZE = int(img.size[0] / DIM)
         
-    TILESIZE = img.size[0] // DIM
-    width, height = img.size
-    tiles_x = width // TILESIZE
-    tiles_y = height // TILESIZE
-
-    for ty in range(tiles_y):
-        for tx in range(tiles_x):
-            left = tx * TILESIZE
-            upper = ty * TILESIZE
-            right = left + TILESIZE
-            lower = upper + TILESIZE
-            
-            sec = img.crop((left, upper, right, lower))
-            blc = 0
-            
-            for j in range(TILESIZE):
-                for k in range(TILESIZE):
-                    rgb = sec.getpixel((j, k))
-                    if (rgb[0] + rgb[1] + rgb[2]) <= 90:
-                        blc += 1
-
-            if blc >= math.floor(TILESIZE * TILESIZE * 0.9):
-                sects.append("#")
+    # Resizing minimally for nxn tiling, dim = num divisions in img width
+    tilesize = int(img.size[0] // dim)
+    img = img.resize((tilesize * dim, img.size[1] - img.size[1] % tilesize), resample=Image.BILINEAR)   
+    
+    print(f"Final IMG size: {img.size}\nTILESIZE: {tilesize}\n")
+    
+    # Store image section densities
+    ascii_2d = []
+    for top in range(img.size[1]//tilesize):
+        row = []
+        for left in range(img.size[0]//tilesize):
+            sect = img.crop((left*tilesize, top*tilesize, (left+1)*tilesize, (top+1)*tilesize))
+            sel_total = 0
+            for i in range(tilesize):
+                for j in range(tilesize):
+                    rgb = sect.getpixel((i, j))
+                    rgb = rgb[0] + rgb[1] + rgb[2]
+                    if select_black:
+                        sel_total += 1 if rgb <= 90 else 0
+                    else:
+                        sel_total += 1 if rgb >= 690 else 0
+            if sel_total >= math.floor(tilesize * tilesize * 0.9):
+                row.append('#')
             else:
-                sects.append(" ")
-
-    # Reshape sects array to 2D and convert ascii to voxel points
-    sects_w = DIM
-    sects_h = len(sects) // sects_w
-    ascii_2d = [sects[i * sects_w: (i + 1) * sects_w] for i in range(sects_h)]
-    
+                row.append(" ")
+        ascii_2d.append(row)
     return ascii_2d
-    
+
+'''
+Reshape ascii_2d points to voxels, stack on z-axis to specified depth,
+track object-face/back voxels for different ascii assignment in rendering
+Voxel structure = [((x, y, z), is_side), ...]
+'''
 def ascii_to_3d(ascii_2d, depth):
     voxels = []
     for z in range(depth):
         for y, row in enumerate(ascii_2d):
             for x, char in enumerate(row):
                 if char == '#':
-                    is_side = (z == 0 or z == depth - 1)
-                    voxels.append(([x, y, z], is_side))
-                    
-    return voxels    
-    
+                    is_face = (z == 0 or z == depth - 1)
+                    voxels.append(([x, y, z], is_face))
+    return voxels
+
+'''
+Find geometric center of 3d object to offset rotated points each frame.
+Without, object will swing around y-axis and out of frame.
+'''
 def center_voxels(voxels):
-    xs = [v[0][0] for v in voxels]
-    ys = [v[0][1] for v in voxels]
-    zs = [v[0][2] for v in voxels]
-    cx = (max(xs) + min(xs)) / 2
-    cy = (max(ys) + min(ys)) / 2
-    cz = (max(zs) + min(zs)) / 2
-    
-    return cx, cy, cz
-    
-# Y-axis rotation
-def rotate_y(point, angle_rad):
+    x_vals = [v[0][0] for v in voxels]
+    y_vals = [v[0][1] for v in voxels]
+    z_vals = [v[0][2] for v in voxels]
+    # Find  midpoint of each axis
+    mid_x = (max(x_vals) + min(x_vals)) / 2
+    mid_y = (max(y_vals) + min(y_vals)) / 2
+    mid_z = (max(z_vals) + min(z_vals)) / 2
+    return mid_x, mid_y, mid_z
+
+'''
+Rotate voxels around y-axis.
+    [x']   [cosΘ    0    sinΘ]   [x]
+    [y'] = [  0     1      0 ] * [y]
+    [z']   [-sinΘ   0    cosΘ]   [z]
+'''
+def rotate_y(point, angle):
     x, y, z = point
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-    x_rot = x * cos_a + z * sin_a
-    z_rot = -x * sin_a + z * cos_a
-    
-    return[x_rot, y, z_rot]
-    
-# 3D -> 2D plane projection and rendering
-def project(point, view_distance=200, screen_w=100, screen_h=100):
+    cos = math.cos(angle)
+    sin = math.sin(angle)
+    x_rot = x*cos + z*sin
+    z_rot = -x*sin + z*cos
+    return [x_rot, y, z_rot]
+
+'''
+3D -> 2D plane perspective projection for frame rendering. Scale x and
+y values inversely by factor that scales with z (view_distance + z)
+'''
+def project(point, view_distance=250, screen_w=100, screen_h=100):
     x, y, z = point
     denom = view_distance + z
     if denom <= 0:
         return None
-    
     factor = view_distance / denom
     x_proj = int(screen_w / 2 + x * factor)
     y_proj = int(screen_h / 2 + y * factor)
-    
     return (x_proj, y_proj)
-    
-def render_frame(points, chars, min_x, min_y, w, h, padding=5, depths=None):
-    frame = [['.' for _ in range(w)] for _ in range(h)]
-    zbuffer = [[float('inf') for _ in range(w)] for _ in range(h)]
 
+'''
+Return string represented frames of given character array with excess 
+space trimmed from object. String is prepared for json storage.
+'''
+def render_frame(points, chars, min_x, min_y, w, h, padding=5, depths=None):
+    frame = [['.' for _ in range(w)] for _ in range(h)] # 'blank' frame
+    zbuffer = [[float('inf') for _ in range(w)] for _ in range(h)]
+    
     for i, (x, y) in enumerate(points):
         fx = x - min_x + padding
         fy = y - min_y + padding
+        # Insert chars to positions
         if 0 <= fx < w and 0 <= fy < h:
             z = depths[i] if depths else 0
             if z < zbuffer[fy][fx]:
                 zbuffer[fy][fx] = z
                 frame[fy][fx] = chars[i]
-    
-    return '\n'.join(''.join(row) for row in frame) + '\n' + ''.join(['.' for _ in range(w - 13)] + ['N', 'O', 'T', ' ', 'A', ' ', 'G', 'I', 'F', '.', '.', '.', '.']) + '\n' + ''.join('.' for _ in range(w))
+    return '\n'.join(''.join(row) for row in frame)
 
-            
-def save_frames_to_json(frames, json_path):
-    with open(json_path, 'w') as f:
+'''
+Dump frame strings into json for JS iteration
+'''
+def save_frames_to_json(frames, path):
+    with open(path, 'w') as f:
         json.dump(frames, f)
-    
+
+'''
+~~~~~ Main with param descriptions ~~~~~
+'''
+# Source image directory
+IMGDIR = 'test_images'
+# Input image index in image directory
+IMGINDEX = 0
+# Color selection, 1 for black, 0 for white\
+SELECTION = 1
+# Number tiles in img width
+DIM = 80
+# 3D image thickness
+DEPTH = 6
+# Number of frames in 360*
+FRAMECOUNT = 50
+# Path to JSON file to store frames
+JSONPATH = "ascii_frames.json"
+
 if __name__ == '__main__':
-    DIM = 170
-    IMGINDEX = 4
-    DEPTH = 10
-    FRAME_COUNT = 50
-    JSON_PATH = "ascii_frames.json"
+    ascii = get_ascii(img_index=IMGINDEX, select_black=SELECTION, dim=DIM)    
+    voxels = ascii_to_3d(ascii_2d=ascii, depth=DEPTH)
+    mid_x, mid_y, mid_z = center_voxels(voxels=voxels)
     
-    ascii = get_ascii(dir_ind=IMGINDEX, dim=DIM)
-    voxels = ascii_to_3d(ascii, DEPTH)
-    cx, cy, cz = center_voxels(voxels)
-    
-    # Static projection to determine frame size
-    project_static = [project([v[0][0] - cx, v[0][1] - cy, v[0][2] - cz]) for v in voxels]
-    xs, ys = zip(*project_static)
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    fixed_width = max_x - min_x + 1 + 10
-    fixed_height = max_y - min_y + 1 + 10
+    # Determine frame size with static projection centered around 0,0,0
+    project_static = [project(point=[v[0][0] - mid_x, v[0][1] - mid_y, v[0][2] - mid_z]) for v in voxels]
+    x_vals, y_vals = zip(*project_static)
+    # Calculating 2D bounding box
+    min_x, max_x = min(x_vals), max(x_vals)
+    min_y, max_y = min(y_vals), max(y_vals)
+    frame_width = max_x - min_x + 1 + 10 # Add 1 for inclusive size, extra is padding
+    frame_height = max_y - min_y + 1 + 10
     
     frames = []
     
-    for i in range(FRAME_COUNT):
-        angle = i * (2 * math.pi / FRAME_COUNT)
+    for i in range(FRAMECOUNT):
+        angle = i * (2 * math.pi / FRAMECOUNT)
         rotated = []
         chars = []
         
-        for (pos, is_side) in voxels:
-            shifted = [pos[0] - cx, pos[1] - cy, pos[2] - cz]
-            rot = rotate_y(shifted, angle)
-            rotated.append(rot)
-            chars.append('#' if is_side else '@')
+        # Offsetting voxels by midpoints and picking chars to represent sides 
+        for (pos, is_face) in voxels:
+            shifted = [pos[0] - mid_x, pos[1] - mid_y, pos[2] - mid_z]
+            rot_pos = rotate_y(point=shifted, angle=angle)
+            rotated.append(rot_pos)
+            chars.append('#' if is_face else '@')
         
         projected = []
         depths = []
         filtered_chars = []
-
+        
+        # Projecting each rotated voxel, extract z for depth used in rendering
         for j, p in enumerate(rotated):
-            proj = project(p)
+            proj = project(point=p)
             if proj is not None:
                 projected.append(proj)
                 depths.append(p[2])
                 filtered_chars.append(chars[j])
-
-        frame = render_frame(projected, filtered_chars, min_x, min_y, fixed_width, fixed_height, padding=5, depths=depths)
+                
+        frame = render_frame(points=projected, chars=filtered_chars, min_x=min_x, \
+                            min_y=min_y, w=frame_width, h=frame_height, padding=5, depths=depths)
         frames.append(frame)
-
-    save_frames_to_json(frames, JSON_PATH)
-    print(f"Saved {len(frames)} frames to '{JSON_PATH}'")
+        
+    save_frames_to_json(frames=frames, path=JSONPATH)
+    print(f"Saved {len(frames)} frames to {JSONPATH}")

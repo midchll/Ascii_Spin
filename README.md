@@ -1,3 +1,3 @@
 ## Ascii_Spin
 
-> Standard b/w image to ascii conversion but voxelized, stacked on z-axis, and rotated around y for 3D spinning effect. I created this as a proof of concept for my ideal stylized masthead for future project. Some test images are included but main function variables must be updated as this is the entry point. The rendering can be seen on the html document which iterates over exported frames. Refactoring incomplete.
+> Standard b/w image to ascii conversion but voxelized, stacked on z-axis, and rotated around y for 3D spinning effect. I created this as a proof of concept for my ideal stylized masthead for future project. Some test images are included but main function variables must be updated as this is the entry point. The rendering can be seen on the html document which iterates over exported frames.
