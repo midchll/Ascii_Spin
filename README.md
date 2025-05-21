@@ -1,3 +1,5 @@
 ## Ascii_Spin
 
-> Standard b/w image to ascii conversion but voxelized, stacked on z-axis, and rotated around y for 3D spinning effect. I created this as a proof of concept for my ideal stylized masthead for future project. Some test images are included but main function variables must be updated as this is the entry point. The rendering can be seen on the html document which iterates over exported frames.
+### Mostly standard reversable b/w image to ascii conversion that's voxelized, layered on z-axis, and rotated around y for a spinning 3D object effect.
+#### I created this as a proof of concept for my ideal stylized masthead for a future project.
+#### Some test images are included but globals must be updated as main.py is the 'entry point'. Upon running, frames are exported to ascii_frames.json and can be iterated and printed to the DOM. View index.html in browser to see effect.
