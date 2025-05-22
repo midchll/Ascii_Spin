@@ -11,16 +11,25 @@ import json
 
 # Source image directory
 IMGDIR = 'test_images'
+
 # Input image index in image directory
 IMGINDEX = 1
+
 # Color selection, 1 for black, 0 for white
 SELECTION = 1
-# Number tiles in img width
-DIM = 100
+
+# Number tiles in img width (increasing may decrease detail loss)
+DIM = 80
+
 # 3D image thickness
-DEPTH = 11
+DEPTH = 10
+
+# Viewing distance from object (increasing may reduce imperfections for wider objects)
+VIEWDISTANCE = 260
+
 # Number of frames in 360*
 FRAMECOUNT = 50
+
 # Path to JSON file to store frames
 JSONPATH = "ascii_frames.json"
 
@@ -108,16 +117,16 @@ def rotate_y(point, angle):
     z_rot = -x*sin + z*cos
     return [x_rot, y, z_rot]
 
-def project(point, view_distance=250, screen_w=100, screen_h=100):
+def project(point, screen_w=100, screen_h=100):
     '''
     3D -> 2D plane perspective projection for frame rendering. Scale x and
-    y values inversely by factor that scales with z (view_distance + z)
+    y values inversely by factor that scales with z (view distance + z)
     '''
     x, y, z = point
-    denom = view_distance + z
+    denom = VIEWDISTANCE + z
     if denom <= 0:
         return None
-    factor = view_distance / denom
+    factor = VIEWDISTANCE / denom
     x_proj = int(screen_w / 2 + x * factor)
     y_proj = int(screen_h / 2 + y * factor)
     return (x_proj, y_proj)
