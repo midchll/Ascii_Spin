@@ -9,13 +9,28 @@ from PIL import Image
 import math
 import json
 
-'''
-Standard image to ASCII conversion. Image disection and character assignment
-based on target color density.
-'''
+# Source image directory
+IMGDIR = 'test_images'
+# Input image index in image directory
+IMGINDEX = 1
+# Color selection, 1 for black, 0 for white
+SELECTION = 1
+# Number tiles in img width
+DIM = 100
+# 3D image thickness
+DEPTH = 11
+# Number of frames in 360*
+FRAMECOUNT = 50
+# Path to JSON file to store frames
+JSONPATH = "ascii_frames.json"
+
 def get_ascii(img_index, select_black=1, dim=100):
+    '''
+    Standard image to ASCII conversion. Image disection and character assignment
+    based on target color density.
+    '''
     img = Image.open(f'{IMGDIR}/{listdir('test_images')[img_index]}')
-    # Paste img over b/w background in case of transparency
+    # Paste image over b/w background to eliminate transparency
     if img.mode == "RGBA":
         bg = Image.new("RGBA", img.size, "WHITE") if select_black \
             else Image.new("RGBA", img.size, "BLACK")
@@ -50,12 +65,12 @@ def get_ascii(img_index, select_black=1, dim=100):
         ascii_2d.append(row)
     return ascii_2d
 
-'''
-Reshape ascii_2d points to voxels, stack on z-axis to specified depth,
-track object-face/back voxels for different ascii assignment in rendering
-Voxel structure = [((x, y, z), is_side), ...]
-'''
 def ascii_to_3d(ascii_2d, depth):
+    '''
+    Reshape ascii_2d points to voxels, stack on z-axis to specified depth,
+    track object-face/back voxels for different ascii assignment in rendering
+    Voxel structure = [((x, y, z), is_side), ...]
+    '''
     voxels = []
     for z in range(depth):
         for y, row in enumerate(ascii_2d):
@@ -65,11 +80,11 @@ def ascii_to_3d(ascii_2d, depth):
                     voxels.append(([x, y, z], is_face))
     return voxels
 
-'''
-Find geometric center of 3d object to offset rotated points each frame.
-Without, object will swing around y-axis and out of frame.
-'''
 def center_voxels(voxels):
+    '''
+    Find geometric center of 3d object to offset rotated points each frame.
+    Without, object will swing around y-axis and out of frame.
+    '''
     x_vals = [v[0][0] for v in voxels]
     y_vals = [v[0][1] for v in voxels]
     z_vals = [v[0][2] for v in voxels]
@@ -79,13 +94,13 @@ def center_voxels(voxels):
     mid_z = (max(z_vals) + min(z_vals)) / 2
     return mid_x, mid_y, mid_z
 
-'''
-Rotate voxels around y-axis.
-    [x']   [cosΘ    0    sinΘ]   [x]
-    [y'] = [  0     1      0 ] * [y]
-    [z']   [-sinΘ   0    cosΘ]   [z]
-'''
 def rotate_y(point, angle):
+    '''
+    Rotate voxels around y-axis.
+        [x']   [cosΘ    0    sinΘ]   [x]
+        [y'] = [  0     1      0 ] * [y]
+        [z']   [-sinΘ   0    cosΘ]   [z]
+    '''
     x, y, z = point
     cos = math.cos(angle)
     sin = math.sin(angle)
@@ -93,11 +108,11 @@ def rotate_y(point, angle):
     z_rot = -x*sin + z*cos
     return [x_rot, y, z_rot]
 
-'''
-3D -> 2D plane perspective projection for frame rendering. Scale x and
-y values inversely by factor that scales with z (view_distance + z)
-'''
 def project(point, view_distance=250, screen_w=100, screen_h=100):
+    '''
+    3D -> 2D plane perspective projection for frame rendering. Scale x and
+    y values inversely by factor that scales with z (view_distance + z)
+    '''
     x, y, z = point
     denom = view_distance + z
     if denom <= 0:
@@ -107,49 +122,33 @@ def project(point, view_distance=250, screen_w=100, screen_h=100):
     y_proj = int(screen_h / 2 + y * factor)
     return (x_proj, y_proj)
 
-'''
-Return string represented frames of given character array with excess 
-space trimmed from object. String is prepared for json storage.
-'''
 def render_frame(points, chars, min_x, min_y, w, h, padding=5, depths=None):
+    '''
+    Return string represented frames of given character array with excess 
+    space trimmed from object. String is prepared json.
+    '''
     frame = [['.' for _ in range(w)] for _ in range(h)] # 'blank' frame
-    zbuffer = [[float('inf') for _ in range(w)] for _ in range(h)]
+    zbuffer = [[float('inf') for _ in range(w)] for _ in range(h)] # minimum z val frame
     
     for i, (x, y) in enumerate(points):
+        # frame-relative positions
         fx = x - min_x + padding
         fy = y - min_y + padding
-        # Insert chars to positions
         if 0 <= fx < w and 0 <= fy < h:
+            # render top-most surface only
             z = depths[i] if depths else 0
             if z < zbuffer[fy][fx]:
                 zbuffer[fy][fx] = z
                 frame[fy][fx] = chars[i]
     return '\n'.join(''.join(row) for row in frame)
 
-'''
-Dump frame strings into json for JS iteration
-'''
 def save_frames_to_json(frames, path):
+    '''
+    Dump frame strings into json
+    '''
     with open(path, 'w') as f:
         json.dump(frames, f)
 
-'''
-~~~~~ Main with param descriptions ~~~~~
-'''
-# Source image directory
-IMGDIR = 'test_images'
-# Input image index in image directory
-IMGINDEX = 1
-# Color selection, 1 for black, 0 for white
-SELECTION = 1
-# Number tiles in img width
-DIM = 100
-# 3D image thickness
-DEPTH = 11
-# Number of frames in 360*
-FRAMECOUNT = 50
-# Path to JSON file to store frames
-JSONPATH = "ascii_frames.json"
 
 if __name__ == '__main__':
     ascii = get_ascii(img_index=IMGINDEX, select_black=SELECTION, dim=DIM)    
